@@ -6,3 +6,6 @@
 .project
 .classpath
 .agents/
+rmq/namesrv/logs/
+rmq/broker/logs/
+rmq/broker/store/

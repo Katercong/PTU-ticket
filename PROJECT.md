@@ -17,8 +17,8 @@
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|--------------|--------|
-| M1 | Project Init & Git Setup | Git repository init, bind remote, verify Docker-based MySQL/Redis/RocketMQ connectivity, commit & push (Conv: 0fe2ca50-edff-4846-826d-d33a7ea71623) | None | IN_PROGRESS |
-| M2 | Ticket Query (Cache-Aside) | Remaining tickets GET endpoint, Cache-Aside logic, Redisson lock for cache rebuild | M1 | PLANNED |
+| M1 | Project Init & Git Setup | Git repository init, bind remote, verify Docker-based MySQL/Redis/RocketMQ connectivity, commit & push | None | DONE |
+| M2 | Ticket Query (Cache-Aside) | Remaining tickets GET endpoint, Cache-Aside logic, Redisson lock for cache rebuild | M1 | IN_PROGRESS |
 | M3 | Order Placement (Lua + MQ) | Order placement POST endpoint, Redis Lua script for stock deduction, RocketMQ producer/consumer, DB async insertion | M2 | PLANNED |
 | M4 | Idempotency & Optimization | MySQL unique constraint validation, joint/covering index optimization, Chain of Responsibility validation, Strategy pricing | M3 | PLANNED |
 | M5 | E2E Integration & Audit | Pass unit/integration tests and python concurrent stress test, Forensic Auditor CLEAN status | M4, E2E | PLANNED |
@@ -49,4 +49,5 @@
     "message": "Order is processing"
   }
   ```
+
 

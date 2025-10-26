@@ -1,0 +1,26 @@
+﻿version: '3.8'
+
+services:
+  namesrv:
+    image: apache/rocketmq:5.1.0
+    container_name: rmqnamesrv
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+    volumes:
+      - ./rmq/namesrv/logs:/home/rocketmq/logs
+
+  broker:
+    image: apache/rocketmq:5.1.0
+    container_name: rmqbroker
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+      - "10912:10912"
+    volumes:
+      - ./rmq/broker/logs:/home/rocketmq/logs
+      - ./rmq/broker/store:/home/rocketmq/store
+      - ./rmq/broker/conf/broker.conf:/home/rocketmq/conf/broker.conf
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf -n namesrv:9876
+    depends_on:
+      - namesrv
