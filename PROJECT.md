@@ -1,4 +1,4 @@
-﻿# Project: PTU-Ticket High Concurrency Railway Ticketing System
+# Project: PTU-Ticket High Concurrency Railway Ticketing System
 
 ## Architecture
 - **Monolithic Spring Boot Application**: Zero microservice components (no Spring Cloud, Nacos, Feign, etc.).
@@ -22,7 +22,7 @@
 | M3 | Order Placement (Lua + MQ) | Order placement POST endpoint, Redis Lua script for stock deduction, RocketMQ producer/consumer, DB async insertion | M2 | PLANNED |
 | M4 | Idempotency & Optimization | MySQL unique constraint validation, joint/covering index optimization, Chain of Responsibility validation, Strategy pricing | M3 | PLANNED |
 | M5 | E2E Integration & Audit | Pass unit/integration tests and python concurrent stress test, Forensic Auditor CLEAN status | M4, E2E | PLANNED |
-| E2E | E2E Testing Track | Define test infra, create Tiers 1-4 tests, write TEST_INFRA.md, publish TEST_READY.md | M1 | IN_PROGRESS |
+| E2E | E2E Testing Track | Define test infra, create Tiers 1-4 tests, write TEST_INFRA.md, publish TEST_READY.md | M1 | DONE |
 
 ## Interface Contracts
 ### Ticket Query Interface

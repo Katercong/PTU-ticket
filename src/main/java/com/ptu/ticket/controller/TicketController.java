@@ -1,11 +1,13 @@
 package com.ptu.ticket.controller;
 
+import com.ptu.ticket.entity.Ticket;
 import com.ptu.ticket.entity.TicketRoute;
 import com.ptu.ticket.service.TicketService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/ticket")
 public class TicketController {
 
     private final TicketService ticketService;
@@ -14,12 +16,19 @@ public class TicketController {
         this.ticketService = ticketService;
     }
 
-    @GetMapping("/query")
+    @GetMapping("/api/ticket/query")
     public TicketRoute queryTicket(@RequestParam String trainNumber) {
         return ticketService.getTicketInfo(trainNumber);
     }
 
-    @PostMapping("/buy")
+    @GetMapping("/api/tickets/query")
+    public List<Ticket> queryTickets(@RequestParam String fromStation,
+                                     @RequestParam String toStation,
+                                     @RequestParam String date) {
+        return ticketService.queryTickets(fromStation, toStation, date);
+    }
+
+    @PostMapping("/api/ticket/buy")
     public String buyTicket(@RequestParam Long userId, 
                             @RequestParam String trainNumber, 
                             @RequestParam(defaultValue = "adult") String userType) {
