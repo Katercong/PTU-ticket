@@ -67,34 +67,41 @@ public class TicketServiceImpl implements TicketService {
     @Override
     public TicketRoute getTicketInfo(String trainNumber) {
         String cacheKey = TICKET_INFO_PREFIX + trainNumber;
+        // 1. 查缓存
         TicketRoute route = (TicketRoute) redisTemplate.opsForValue().get(cacheKey);
         
         if (route != null) {
-            log.info("Cache hit for {}", trainNumber);
+            log.info("命中缓存：{}", trainNumber);
             return route;
         }
 
-        log.info("Cache miss for {}. Acquiring distributed lock...", trainNumber);
+        log.info("缓存未命中：{}。准备获取分布式锁重建缓存...", trainNumber);
+        // 2. 缓存击穿防护：获取 Redisson 分布式锁
         RLock lock = redissonClient.getLock(LOCK_PREFIX + trainNumber);
         try {
+            // 尝试加锁。如果不设置 leaseTime，Redisson 的看门狗(Watchdog)会自动每 10 秒续期一次
             if (lock.tryLock(10, TimeUnit.SECONDS)) {
+                // 双重检查锁定 (Double Check)
                 route = (TicketRoute) redisTemplate.opsForValue().get(cacheKey);
                 if (route != null) {
                     return route;
                 }
                 
+                // 从数据库读取
                 route = ticketRouteMapper.selectById(1L);
                 if (route != null) {
+                    // 将查询结果放入 Redis 缓存并设置 60 分钟过期时间
                     redisTemplate.opsForValue().set(cacheKey, route, 60, TimeUnit.MINUTES);
                 }
                 return route;
             } else {
-                throw new RuntimeException("System busy, please try again later.");
+                throw new RuntimeException("系统正忙，请稍后再试。");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Thread interrupted", e);
+            throw new RuntimeException("线程被中断", e);
         } finally {
+            // 确保只有持有锁的当前线程才能解锁
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
@@ -103,14 +110,17 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public String buyTicket(Long userId, String trainNumber, String userType) {
+        // 1. 责任链模式：参数校验（如黑名单校验）
         TicketOrder mockOrder = new TicketOrder();
         mockOrder.setUserId(userId);
         blacklistValidator.validate(mockOrder);
 
+        // 2. 策略模式：动态票价计算
         TicketRoute route = getTicketInfo(trainNumber);
         PriceStrategy strategy = priceStrategies.getOrDefault(userType + "PriceStrategy", priceStrategies.get("adultPriceStrategy"));
         Double finalPrice = strategy.calculatePrice(route.getBasePrice());
 
+        // 3. Lua 脚本：原子扣减 Redis 库存（防止超卖）
         String stockKey = TICKET_STOCK_PREFIX + trainNumber;
         String luaScript = "local stock = tonumber(redis.call('get', KEYS[1])) " +
                            "local amount = tonumber(ARGV[1]) " +
@@ -121,17 +131,18 @@ public class TicketServiceImpl implements TicketService {
         Long result = redisTemplate.execute(script, Collections.singletonList(stockKey), 1);
 
         if (result == null || result == 0) {
-            throw new RuntimeException("Tickets sold out!");
+            throw new RuntimeException("手慢了，车票已售罄！");
         } else if (result == -1) {
-            throw new RuntimeException("Stock not initialized in Redis!");
+            throw new RuntimeException("Redis 中尚未初始化该车次库存！");
         }
 
+        // 4. RocketMQ 异步发送订单消息（流量削峰）
         String orderNo = UUID.randomUUID().toString().replace("-", "");
         OrderMessage msg = new OrderMessage(orderNo, userId, trainNumber, finalPrice);
         rocketMQTemplate.convertAndSend("TICKET_ORDER_TOPIC", msg);
 
-        log.info("Ticket reserved for User {}. Order {} sent to MQ.", userId, orderNo);
-        return "Order submitted! Please wait for async processing. OrderNo: " + orderNo;
+        log.info("用户 {} 抢票成功，已发送订单 {} 到 MQ 异步落库。", userId, orderNo);
+        return "下单请求已受理！请稍候在订单中心查看。订单号: " + orderNo;
     }
 
     @Override
