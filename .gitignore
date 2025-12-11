@@ -9,3 +9,6 @@
 rmq/namesrv/logs/
 rmq/broker/logs/
 rmq/broker/store/
+
+# Local interview notes (not part of project)
+INTERVIEW.md

@@ -1,4 +1,5 @@
 -- ticket_deduct.lua
+-- 通过 Spring DefaultRedisScript 从 classpath 加载执行，保证扣减库存的原子性。
 -- KEYS[1] = ticket_stock_key
 -- ARGV[1] = deduct_amount
 

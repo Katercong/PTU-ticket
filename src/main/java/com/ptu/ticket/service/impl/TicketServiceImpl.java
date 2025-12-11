@@ -8,6 +8,7 @@ import com.ptu.ticket.mapper.TicketMapper;
 import com.ptu.ticket.mapper.TicketRouteMapper;
 import com.ptu.ticket.mq.OrderMessage;
 import com.ptu.ticket.pattern.BlacklistValidator;
+import com.ptu.ticket.pattern.OrderValidator;
 import com.ptu.ticket.pattern.PriceStrategy;
 import com.ptu.ticket.service.TicketService;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class TicketServiceImpl implements TicketService {
     private final TicketMapper ticketMapper;
     private final Map<String, PriceStrategy> priceStrategies;
     private final BlacklistValidator blacklistValidator;
+    private final OrderValidator orderValidatorChain;
 
     private static final String TICKET_STOCK_PREFIX = "ticket:stock:";
     private static final String TICKET_INFO_PREFIX = "ticket:info:";
@@ -54,7 +56,8 @@ public class TicketServiceImpl implements TicketService {
                              TicketRouteMapper ticketRouteMapper,
                              TicketMapper ticketMapper,
                              Map<String, PriceStrategy> priceStrategies,
-                             BlacklistValidator blacklistValidator) {
+                             BlacklistValidator blacklistValidator,
+                             OrderValidator orderValidatorChain) {
         this.redisTemplate = redisTemplate;
         this.redissonClient = redissonClient;
         this.rocketMQTemplate = rocketMQTemplate;
@@ -62,6 +65,7 @@ public class TicketServiceImpl implements TicketService {
         this.ticketMapper = ticketMapper;
         this.priceStrategies = priceStrategies;
         this.blacklistValidator = blacklistValidator;
+        this.orderValidatorChain = orderValidatorChain;
     }
 
     @Override
@@ -110,10 +114,11 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public String buyTicket(Long userId, String trainNumber, String userType) {
-        // 1. 责任链模式：参数校验（如黑名单校验）
+        // 1. 责任链模式：参数校验 + 黑名单校验（链头触发，按顺序执行所有节点）
         TicketOrder mockOrder = new TicketOrder();
         mockOrder.setUserId(userId);
-        blacklistValidator.validate(mockOrder);
+        mockOrder.setTrainNumber(trainNumber);
+        orderValidatorChain.validate(mockOrder);
 
         // 2. 策略模式：动态票价计算
         TicketRoute route = getTicketInfo(trainNumber);
@@ -122,12 +127,11 @@ public class TicketServiceImpl implements TicketService {
 
         // 3. Lua 脚本：原子扣减 Redis 库存（防止超卖）
         String stockKey = TICKET_STOCK_PREFIX + trainNumber;
-        String luaScript = "local stock = tonumber(redis.call('get', KEYS[1])) " +
-                           "local amount = tonumber(ARGV[1]) " +
-                           "if stock == nil then return -1 end " +
-                           "if stock >= amount then redis.call('decrby', KEYS[1], amount) return 1 else return 0 end";
-        
-        DefaultRedisScript<Long> script = new DefaultRedisScript<>(luaScript, Long.class);
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        // 从 classpath 加载 ticket_deduct.lua，保证脚本可审计、可复用
+        script.setScriptSource(new org.springframework.scripting.support.ResourceScriptSource(
+                new org.springframework.core.io.ClassPathResource("lua/ticket_deduct.lua")));
+        script.setResultType(Long.class);
         Long result = redisTemplate.execute(script, Collections.singletonList(stockKey), 1);
 
         if (result == null || result == 0) {
